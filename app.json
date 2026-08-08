@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Nexa Notes",
+    "slug": "nexa-notes",
+    "scheme": "nexanotes",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/nexa-notes-logo.png",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Nexa Notes to record audio for transcription and study notes.",
+          "enableBackgroundRecording": true
+        }
+      ],
+      "expo-router"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nexanotes.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.nexanotes.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/nexa-notes-logo.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    }
+  }
+}
