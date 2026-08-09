@@ -7,7 +7,20 @@ import OpenAI from 'openai';
 
 fs.mkdirSync('uploads', { recursive: true });
 const app = express();
-const upload = multer({ dest: 'uploads/', limits: { fileSize: 25 * 1024 * 1024 } });
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, 'uploads/'),
+  filename: (_req, file, cb) => {
+    // Keep a real audio extension. OpenAI determines the upload format from the
+    // filename; Multer's default temp names have no extension and can produce
+    // a misleading "Unsupported file format" response.
+    const original = String(file.originalname || 'recording.m4a');
+    const dot = original.lastIndexOf('.');
+    const ext = dot >= 0 ? original.slice(dot).toLowerCase() : '.m4a';
+    const safeExt = /^\.(m4a|mp4|mp3|wav|webm|mpeg|mpga)$/.test(ext) ? ext : '.m4a';
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${safeExt}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(cors());
