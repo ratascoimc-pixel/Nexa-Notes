@@ -33,7 +33,7 @@ const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'nexa-notes-api', jobs: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'nexa-notes-api', jobs: true, translation: Boolean(process.env.GOOGLE_TRANSLATE_API_KEY) }));
 
 function requireKey(res) {
   if (!process.env.OPENAI_API_KEY) {
@@ -57,15 +57,23 @@ async function withRetry(fn, attempts = 3) {
   throw last;
 }
 
+function normalizeLanguage(value) {
+  const code = String(value || 'auto').trim().toLowerCase();
+  if (code === 'auto') return 'auto';
+  return /^[a-z]{2,3}$/.test(code) ? code : 'auto';
+}
+
 // Backward-compatible endpoint for already-installed older betas.
 app.post('/transcribe', upload.single('audio'), async (req, res) => {
   try {
     if (!requireKey(res)) return;
     if (!req.file) return res.status(400).send('Missing audio');
     const previous = String(req.body.previousContext || '').slice(-1200);
+    const language = normalizeLanguage(req.body.language);
     const result = await withRetry(() => openai.audio.transcriptions.create({
       file: fs.createReadStream(req.file.path),
       model: 'gpt-transcribe',
+      language: language === 'auto' ? undefined : language,
       prompt: previous ? `This is the next segment of one continuous recording. Use this prior ending only for continuity of names and phrasing: ${previous}` : undefined,
     }));
     res.json({ text: result.text || '' });
@@ -87,6 +95,7 @@ function publicTranscriptionJob(job) {
     uploadedParts: job.parts.filter(Boolean).length,
     completedParts: job.completedParts || 0,
     currentPart: job.currentPart || undefined,
+    language: job.language || 'auto',
     transcript: job.status === 'completed' ? job.transcript : undefined,
     error: job.error,
   };
@@ -101,6 +110,7 @@ app.post('/transcription-jobs', (req, res) => {
     jobId,
     recordingId: String(req.body?.recordingId || ''),
     title: String(req.body?.title || 'Recording'),
+    language: normalizeLanguage(req.body?.language),
     totalParts,
     parts: new Array(totalParts),
     completedParts: 0,
@@ -150,6 +160,7 @@ function startTranscriptionJob(job) {
         const result = await withRetry(() => openai.audio.transcriptions.create({
           file: fs.createReadStream(job.parts[index].path),
           model: 'gpt-transcribe',
+          language: job.language === 'auto' ? undefined : job.language,
           prompt: previous ? `This is segment ${index + 1} of one continuous recording. Use this prior ending only for continuity of names and phrasing: ${previous}` : undefined,
         }));
         textParts.push(String(result.text || '').trim());
@@ -179,15 +190,19 @@ function parseJson(text) {
 }
 
 const organizationJobs = new Map();
-const allowedModes = new Set(['study-notes', 'detailed-notes', 'outline', 'summary', 'key-points', 'flashcards']);
+const allowedModes = new Set(['study-notes', 'detailed-outline', 'simple-outline', 'summary', 'key-points', 'qa-review', 'references', 'detailed-notes', 'outline', 'flashcards']);
 
 function modeInstructions(mode) {
   const instructions = {
-    'study-notes': 'Create study notes with the main theme, important points, references mentioned, illustrations/examples, practical application, and review questions.',
+    'study-notes': 'Create polished study notes similar to a well-organized study handout. Start with the theme, then use numbered major sections. Include important scriptures/references, the speaker’s examples, main ideas, practical application, and concise key takeaways. Keep the progression easy to study later.',
+    'detailed-outline': 'Create a detailed hierarchical outline. Use numbered major headings and clearly labeled subpoints (A., B., 1., 2., a., b. where helpful). Preserve supporting details, examples, references, transitions, and conclusions from the transcript.',
+    'simple-outline': 'Create a simple outline with major headings and short supporting bullet points. Keep it clean, uncluttered, and easy to scan quickly.',
+    summary: 'Create a concise but substantial summary of the full recording, followed by the most important conclusions and takeaways.',
+    'key-points': 'Extract the strongest key points, memorable ideas, references, examples, conclusions, and action items without unnecessary detail.',
+    'qa-review': 'Create useful review questions with accurate answers drawn only from the transcript. Group related questions into logical sections and include a short summary of what each section reinforces.',
+    references: 'Extract scriptures, quotations, named sources, publications, people, dates, or other references that are explicitly mentioned. For each one, explain the point it supported in the talk. Do not invent missing citation details.',
     'detailed-notes': 'Create thorough chronological notes that follow the transcript from beginning to end, preserving the speaker’s progression and important details.',
     outline: 'Create a clean hierarchical outline with major headings, subpoints, supporting details, and references. Make the structure easy to scan.',
-    summary: 'Create a concise but substantial summary, followed by the most important conclusions and takeaways.',
-    'key-points': 'Extract the strongest key points, memorable ideas, references, examples, conclusions, and action items without unnecessary detail.',
     flashcards: 'Create useful question-and-answer flashcards for review. Group related cards into logical sections.',
   };
   return instructions[mode] || instructions['study-notes'];
@@ -250,6 +265,81 @@ async function processOrganizationJob(job) {
     delete job.transcript;
   }
 }
+
+function decodeGoogleText(value) {
+  return String(value || '')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number(code)));
+}
+
+function splitForTranslation(text, maxChars = 4500) {
+  const source = String(text || '').trim();
+  if (!source) return [];
+  const paragraphs = source.split(/\n{2,}/);
+  const chunks = [];
+  let current = '';
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > maxChars) {
+      if (current) { chunks.push(current); current = ''; }
+      for (let i = 0; i < paragraph.length; i += maxChars) chunks.push(paragraph.slice(i, i + maxChars));
+      continue;
+    }
+    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
+    if (candidate.length > maxChars) {
+      if (current) chunks.push(current);
+      current = paragraph;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+app.post('/translate', async (req, res) => {
+  try {
+    const apiKey = String(process.env.GOOGLE_TRANSLATE_API_KEY || '').trim();
+    if (!apiKey) {
+      return res.status(503).send('Google Cloud Translation is not configured yet. Add GOOGLE_TRANSLATE_API_KEY to the Render environment after enabling Cloud Translation API.');
+    }
+    const text = String(req.body?.text || '');
+    const targetLanguage = normalizeLanguage(req.body?.targetLanguage);
+    const sourceLanguage = normalizeLanguage(req.body?.sourceLanguage);
+    if (!text.trim()) return res.status(400).send('Transcript text is required.');
+    if (targetLanguage === 'auto') return res.status(400).send('Choose a target language.');
+    if (text.length > 500000) return res.status(413).send('This transcript is too large to translate in one request.');
+
+    const chunks = splitForTranslation(text);
+    const body = { q: chunks, target: targetLanguage, format: 'text' };
+    if (sourceLanguage !== 'auto') body.source = sourceLanguage;
+
+    const response = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data?.error?.message || `Google Cloud Translation returned ${response.status}.`;
+      return res.status(response.status).send(message);
+    }
+    const translations = Array.isArray(data?.data?.translations) ? data.data.translations : [];
+    if (!translations.length) return res.status(502).send('Google Cloud Translation returned no translated text.');
+
+    res.json({
+      text: translations.map((x) => decodeGoogleText(x.translatedText)).join('\n\n'),
+      targetLanguage,
+      detectedSourceLanguage: translations.find((x) => x.detectedSourceLanguage)?.detectedSourceLanguage,
+    });
+  } catch (error) {
+    console.error('Translation failed', error);
+    res.status(500).send(error?.message || 'Translation failed.');
+  }
+});
 
 // Keep legacy endpoint available for an older installed beta.
 app.post('/study-notes', async (req, res) => {
