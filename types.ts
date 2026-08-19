@@ -11,7 +11,29 @@ export type StudyNotes = {
   summary: string;
 };
 
-export type NexaRecording = {
+export type OrganizationMode =
+  | 'detailed-outline'
+  | 'simple-outline'
+  | 'summary'
+  | 'key-points'
+  | 'qa-review'
+  | 'references';
+
+export type OrganizedSection = {
+  heading: string;
+  body: string;
+  items: string[];
+  qa: { question: string; answer: string }[];
+};
+
+export type OrganizedDocument = {
+  title: string;
+  mode: OrganizationMode | 'study-notes';
+  summary: string;
+  sections: OrganizedSection[];
+};
+
+export type NotzRecording = {
   id: string;
   title: string;
   createdAt: string;
@@ -19,7 +41,9 @@ export type NexaRecording = {
   segmentUris: string[];
   transcript?: string;
   notes?: StudyNotes;
+  documents?: Partial<Record<OrganizationMode, OrganizedDocument>>;
   pdfUri?: string;
+  outputPdfUris?: Partial<Record<OrganizationMode, string>>;
   status: ProcessingStatus;
   error?: string;
 };

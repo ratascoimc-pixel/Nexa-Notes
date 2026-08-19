@@ -1,84 +1,61 @@
-# Nexa Notes — Working Beta 1.0
+# NOTZ v1.4
 
-Cross-platform iOS/Android transcription and study-notes app.
+NOTZ is the rebranded and redesigned continuation of the working Nexa Notes v1.4 beta, now presented as part of the **Master Key One** family.
 
-## Working flow
+## What changed
 
-1. Record continuously until the user stops.
-2. Nexa Notes silently rotates the audio into protected 8-minute segments for safer long sessions.
-3. Recordings are kept in the app document directory, not temporary cache.
-4. Send all segments to the included backend for transcription and merge them in order.
-5. Generate structured study notes from the transcript.
-6. Generate a PDF, save a persistent copy in the app documents, and open the native share/save sheet.
-7. Keep the original audio, transcript, notes, and PDF in the recording library until the user deletes them.
+- All user-facing branding is now **NOTZ**.
+- Uses the supplied official NOTZ / Master Key One icon.
+- Premium dark navy / near-black interface with gold accents.
+- Redesigned recording screen with moving waveform, timer, long-recording protection, pause/resume, stop/save, and quick library access.
+- Redesigned library with search and filters for Study Notes, Outlines, and Transcripts.
+- Existing transcript and study-note flow remains supported.
+- The v1.4 organization backend is now surfaced in the app for Detailed Outline, Simple Outline, Summary, Key Points, Q&A Review, and References.
+- Study notes and organized outputs can be exported to persistent PDFs and shared.
+- Translation remains optional and is not required for this build.
 
-## Important architecture note
+## Compatibility decision
 
-The OpenAI API key is intentionally **not** stored inside the phone app. The included `server/` is required for transcription and AI study-note generation. This prevents an API key from being extracted from an installed APK/IPA.
+A few **internal-only** legacy identifiers are intentionally retained:
 
-## Backend setup
+- Android package / iOS bundle ID: `com.nexanotes.app`
+- Expo slug and scheme
+- Local recording-library filename
 
-```bash
-cd server
-npm install
-cp .env.example .env
-# put your API key in .env
-npm start
+Those identifiers are not user-facing. Keeping them is intentional so a signed upgrade can replace the existing beta and continue reading recordings already stored by the older app.
+
+## Backend requirement
+
+The phone app never contains the OpenAI API key. It expects a deployed HTTPS backend through:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=https://YOUR-WORKING-NOTZ-BACKEND
 ```
 
-`server/.env`:
+The included `server/` is the v1.4 backend with NOTZ branding. Translation can remain unconfigured.
+
+Server environment:
 
 ```env
 OPENAI_API_KEY=your_key_here
 PORT=8787
 NOTES_MODEL=gpt-5-mini
+# GOOGLE_TRANSLATE_API_KEY is optional for now
 ```
 
-Deploy this server to a public HTTPS host before installing the app on a phone. Then create a root `.env`:
+## Android APK
 
-```env
-EXPO_PUBLIC_API_BASE_URL=https://YOUR-BACKEND-HOST
-```
-
-## App setup
+The `preview` EAS profile is already configured for an installable APK:
 
 ```bash
 npm install
-npx expo start
-```
-
-For background recording behavior, test a development/preview build rather than relying on iOS Expo Go.
-
-## Android test APK
-
-After signing in to Expo/EAS:
-
-```bash
 npx eas build --platform android --profile preview
 ```
 
-This profile is configured in `eas.json` to produce an installable APK.
+The working backend URL must be supplied as `EXPO_PUBLIC_API_BASE_URL` during the build.
 
-## iOS test build
+## Source basis
 
-```bash
-npx eas build --platform ios --profile development
-```
+This rebrand was prepared from GitHub repository `ratascoimc-pixel/Nexa-Notes`, main commit:
 
-Apple signing/device registration is required for direct physical-device development builds.
-
-## Included safeguards
-
-- Long recording is not capped at 10 minutes.
-- Background recording native configuration is enabled.
-- Hidden segment rotation limits the damage from an individual-file interruption and keeps transcription uploads manageable.
-- A ref-backed segment list prevents a React state timing race at Stop.
-- The final paused duration is computed correctly.
-- Re-transcribing clears stale notes/PDF references so output cannot silently mismatch the transcript.
-- Generated PDFs are moved out of cache into persistent app storage.
-- Deleting a recording also deletes its audio and saved PDF.
-- The backend validates missing API configuration and removes temporary uploads after processing.
-
-## Status
-
-This is a working beta codebase. The remaining external step before full phone testing is deploying the included backend and providing its HTTPS URL. No OpenAI secret belongs in the mobile app.
+`b440ce5329607d9cda9e890e355f491961f44abb` — “Update Nexa Notes server to v1.4”.

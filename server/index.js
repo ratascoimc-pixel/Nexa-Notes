@@ -33,7 +33,7 @@ const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'nexa-notes-api', jobs: true, translation: Boolean(process.env.GOOGLE_TRANSLATE_API_KEY) }));
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'notz-api', jobs: true, translation: Boolean(process.env.GOOGLE_TRANSLATE_API_KEY) }));
 
 function requireKey(res) {
   if (!process.env.OPENAI_API_KEY) {
@@ -216,7 +216,7 @@ function normalizeDocument(value, fallbackTitle, mode) {
     qa: Array.isArray(section?.qa) ? section.qa.map((x) => ({ question: String(x?.question || ''), answer: String(x?.answer || '') })).filter((x) => x.question || x.answer) : [],
   })) : [];
   return {
-    title: String(value?.title || fallbackTitle || 'Nexa Notes'),
+    title: String(value?.title || fallbackTitle || 'Notz'),
     mode,
     summary: String(value?.summary || ''),
     sections,
@@ -304,7 +304,7 @@ app.post('/translate', async (req, res) => {
   try {
     const apiKey = String(process.env.GOOGLE_TRANSLATE_API_KEY || '').trim();
     if (!apiKey) {
-      return res.status(503).send('Google Cloud Translation is not configured yet. Add GOOGLE_TRANSLATE_API_KEY to the Render environment after enabling Cloud Translation API.');
+      return res.status(503).send('Google Cloud Translation is not configured yet. Add GOOGLE_TRANSLATE_API_KEY after enabling Cloud Translation API.');
     }
     const text = String(req.body?.text || '');
     const targetLanguage = normalizeLanguage(req.body?.targetLanguage);
@@ -374,4 +374,4 @@ setInterval(() => {
 }, 30 * 60 * 1000).unref();
 
 const port = Number(process.env.PORT || 8787);
-app.listen(port, '0.0.0.0', () => console.log(`Nexa Notes API running on ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`Notz API running on ${port}`));

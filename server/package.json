@@ -1,6 +1,6 @@
 {
-  "name": "nexa-notes-api",
-  "version": "1.0.0",
+  "name": "notz-api",
+  "version": "1.4.0",
   "type": "module",
   "scripts": { "start": "node index.js" },
   "dependencies": {

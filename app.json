@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Nexa Notes",
+    "name": "Notz",
     "slug": "nexa-notes",
     "scheme": "nexanotes",
-    "version": "1.0.0",
+    "version": "1.4.0",
     "orientation": "portrait",
-    "icon": "./assets/nexa-notes-logo.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/notz-icon.png",
+    "userInterfaceStyle": "dark",
     "plugins": [
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Nexa Notes to record audio for transcription and study notes.",
+          "microphonePermission": "Allow Notz to record audio for transcription and organized notes.",
           "enableBackgroundRecording": true
         }
       ],
@@ -34,8 +34,8 @@
         "FOREGROUND_SERVICE_MICROPHONE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/nexa-notes-logo.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/notz-icon.png",
+        "backgroundColor": "#020812"
       }
     }
   }

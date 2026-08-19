@@ -1,20 +1,21 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { NexaRecording } from '../types';
+import { NotzRecording } from '../types';
 
+// Keep the legacy database filename so an in-place app upgrade keeps existing recordings.
 const DB = `${FileSystem.documentDirectory}nexa-notes-library.json`;
 
-async function readAll(): Promise<NexaRecording[]> {
+async function readAll(): Promise<NotzRecording[]> {
   try {
     const info = await FileSystem.getInfoAsync(DB);
     if (!info.exists) return [];
     const raw = await FileSystem.readAsStringAsync(DB);
-    return JSON.parse(raw) as NexaRecording[];
+    return JSON.parse(raw) as NotzRecording[];
   } catch {
     return [];
   }
 }
 
-async function writeAll(items: NexaRecording[]) {
+async function writeAll(items: NotzRecording[]) {
   await FileSystem.writeAsStringAsync(DB, JSON.stringify(items, null, 2));
 }
 
@@ -27,7 +28,7 @@ export async function getRecording(id: string) {
   return (await readAll()).find((item) => item.id === id) ?? null;
 }
 
-export async function saveRecording(item: NexaRecording) {
+export async function saveRecording(item: NotzRecording) {
   const items = await readAll();
   const index = items.findIndex((r) => r.id === item.id);
   if (index >= 0) items[index] = item;
@@ -36,7 +37,7 @@ export async function saveRecording(item: NexaRecording) {
   return item;
 }
 
-export async function patchRecording(id: string, patch: Partial<NexaRecording>) {
+export async function patchRecording(id: string, patch: Partial<NotzRecording>) {
   const current = await getRecording(id);
   if (!current) throw new Error('Recording not found');
   return saveRecording({ ...current, ...patch });
@@ -49,8 +50,9 @@ export async function deleteRecording(id: string) {
     for (const uri of current.segmentUris) {
       try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
     }
-    if (current.pdfUri) {
-      try { await FileSystem.deleteAsync(current.pdfUri, { idempotent: true }); } catch {}
+    const pdfs = [current.pdfUri, ...Object.values(current.outputPdfUris || {})].filter(Boolean) as string[];
+    for (const uri of pdfs) {
+      try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
     }
   }
   await writeAll(items.filter((r) => r.id !== id));

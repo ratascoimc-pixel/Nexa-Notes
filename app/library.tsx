@@ -1,9 +1,172 @@
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { colors, radii } from '../constants/theme';
 import { listRecordings } from '../lib/store';
-import { NexaRecording } from '../types';
+import { NotzRecording } from '../types';
 
-const duration=(ms:number)=>{const s=Math.floor(ms/1000);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
-export default function Library(){const[items,setItems]=useState<NexaRecording[]>([]);const[refreshing,setRefreshing]=useState(false);const load=useCallback(async()=>setItems(await listRecordings()),[]);useFocusEffect(useCallback(()=>{load()},[load]));const refresh=async()=>{setRefreshing(true);await load();setRefreshing(false)};return <View style={s.root}><FlatList data={items} keyExtractor={x=>x.id} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh}/>} ListEmptyComponent={<View style={s.empty}><Text style={s.emptyTitle}>No recordings yet</Text><Text style={s.emptyText}>Your finished recordings will appear here.</Text></View>} renderItem={({item})=><Pressable style={s.card} onPress={()=>router.push(`/recording/${item.id}`)}><View style={{flex:1}}><Text style={s.title}>{item.title}</Text><Text style={s.meta}>{new Date(item.createdAt).toLocaleDateString()} • {duration(item.durationMs)} • {item.segmentUris.length} segment{item.segmentUris.length===1?'':'s'}</Text><Text style={s.status}>{item.notes?'PDF READY':item.transcript?'TRANSCRIBED':'RECORDED'}</Text></View><Text style={s.arrow}>›</Text></Pressable>}/></View>}
-const s=StyleSheet.create({root:{flex:1,padding:18},card:{backgroundColor:'#fff',padding:18,borderRadius:18,marginBottom:12,flexDirection:'row',alignItems:'center'},title:{fontSize:16,fontWeight:'800',color:'#0B1736'},meta:{fontSize:12,color:'#697386',marginTop:5},status:{fontSize:11,fontWeight:'900',letterSpacing:1.2,color:'#6341E8',marginTop:9},arrow:{fontSize:34,color:'#8993A8'},empty:{alignItems:'center',paddingTop:80},emptyTitle:{fontSize:20,fontWeight:'900',color:'#0B1736'},emptyText:{color:'#667085',marginTop:8}});
+const FILTERS = ['All', 'Study Notes', 'Outlines', 'Transcripts'] as const;
+type Filter = typeof FILTERS[number];
+
+const duration = (ms: number) => {
+  const sec = Math.floor(ms / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+};
+
+function hasOutline(item: NotzRecording) {
+  return Boolean(item.documents?.['detailed-outline'] || item.documents?.['simple-outline']);
+}
+
+function category(item: NotzRecording) {
+  if (item.notes) return 'STUDY NOTES';
+  if (hasOutline(item)) return 'OUTLINE';
+  if (item.transcript) return 'TRANSCRIPT';
+  return 'RECORDING';
+}
+
+export default function Library() {
+  const params = useLocalSearchParams<{ filter?: string }>();
+  const requested = FILTERS.find((value) => value.toLowerCase() === String(params.filter || '').toLowerCase());
+  const [items, setItems] = useState<NotzRecording[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>(requested || 'All');
+
+  const load = useCallback(async () => setItems(await listRecordings()), []);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  const refresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return items.filter((item) => {
+      if (needle && !item.title.toLowerCase().includes(needle) && !String(item.transcript || '').toLowerCase().includes(needle)) return false;
+      if (filter === 'Study Notes' && !item.notes) return false;
+      if (filter === 'Outlines' && !hasOutline(item)) return false;
+      if (filter === 'Transcripts' && !item.transcript) return false;
+      return true;
+    });
+  }, [items, query, filter]);
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <View style={s.root}>
+        <View style={s.headerRow}>
+          <View>
+            <Text style={s.eyebrow}>NOTZ LIBRARY</Text>
+            <Text style={s.heading}>My Notes</Text>
+          </View>
+          <Pressable style={s.newButton} onPress={() => router.replace('/')}>
+            <Text style={s.newButtonText}>＋ NEW</Text>
+          </Pressable>
+        </View>
+
+        <TextInput
+          style={s.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search recordings and transcripts"
+          placeholderTextColor={colors.textDim}
+          selectionColor={colors.goldBright}
+        />
+
+        <View style={s.filters}>
+          {FILTERS.map((value) => (
+            <Pressable key={value} onPress={() => setFilter(value)} style={[s.filter, filter === value && s.filterActive]}>
+              <Text style={[s.filterText, filter === value && s.filterTextActive]}>{value}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <FlatList
+          style={s.list}
+          contentContainerStyle={shown.length ? s.listContent : s.emptyContent}
+          data={shown}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.goldBright} />}
+          ListEmptyComponent={(
+            <View style={s.empty}>
+              <Text style={s.emptyTitle}>{items.length ? 'Nothing matches this filter' : 'No recordings yet'}</Text>
+              <Text style={s.emptyText}>{items.length ? 'Try another filter or search term.' : 'Tap New Recording to capture your first note.'}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <Pressable style={s.card} onPress={() => router.push(`/recording/${item.id}`)}>
+              <View style={s.cardTop}>
+                <Text style={s.category}>{category(item)}</Text>
+                <Text style={s.arrow}>›</Text>
+              </View>
+              <Text style={s.title}>{item.title}</Text>
+              <Text style={s.meta}>{new Date(item.createdAt).toLocaleDateString()} • {duration(item.durationMs)} • {item.segmentUris.length} segment{item.segmentUris.length === 1 ? '' : 's'}</Text>
+              <View style={s.badges}>
+                <Badge label="Audio" active />
+                <Badge label="Transcript" active={Boolean(item.transcript)} />
+                <Badge label="Notes" active={Boolean(item.notes || Object.keys(item.documents || {}).length)} />
+                <Badge label="PDF" active={Boolean(item.pdfUri || Object.keys(item.outputPdfUris || {}).length)} />
+              </View>
+            </Pressable>
+          )}
+        />
+
+        <View style={s.bottomNav}>
+          <Nav label="Home" onPress={() => router.replace('/')} />
+          <Nav label="Library" active onPress={() => {}} />
+          <Pressable style={s.recordNav} onPress={() => router.replace('/')}><Text style={s.recordNavText}>●</Text></Pressable>
+          <Nav label="Outlines" onPress={() => setFilter('Outlines')} />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function Badge({ label, active }: { label: string; active: boolean }) {
+  return <Text style={[s.badge, active && s.badgeActive]}>{label}</Text>;
+}
+
+function Nav({ label, active = false, onPress }: { label: string; active?: boolean; onPress: () => void }) {
+  return <Pressable style={s.navItem} onPress={onPress}><Text style={[s.navText, active && s.navTextActive]}>{label}</Text></Pressable>;
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 18, paddingTop: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  eyebrow: { color: colors.goldBright, fontSize: 10, fontWeight: '900', letterSpacing: 1.8 },
+  heading: { color: colors.text, fontSize: 30, fontWeight: '900', marginTop: 2 },
+  newButton: { backgroundColor: colors.gold, borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 16 },
+  newButtonText: { color: colors.background, fontSize: 11, fontWeight: '900', letterSpacing: 0.7 },
+  search: { marginTop: 16, backgroundColor: colors.surface, borderRadius: radii.medium, borderWidth: 1, borderColor: colors.borderSoft, color: colors.text, paddingHorizontal: 16, paddingVertical: 13, fontSize: 14 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 },
+  filter: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderSoft },
+  filterActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  filterText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
+  filterTextActive: { color: colors.background },
+  list: { flex: 1, marginTop: 14 },
+  listContent: { paddingBottom: 18 },
+  emptyContent: { flexGrow: 1 },
+  card: { backgroundColor: colors.surface, borderRadius: radii.large, borderWidth: 1, borderColor: colors.borderSoft, padding: 17, marginBottom: 12 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  category: { color: colors.goldBright, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
+  arrow: { color: colors.goldBright, fontSize: 27, lineHeight: 27 },
+  title: { color: colors.text, fontSize: 17, fontWeight: '900', marginTop: 3 },
+  meta: { color: colors.textMuted, fontSize: 11, marginTop: 7 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  badge: { color: colors.textDim, backgroundColor: colors.backgroundAlt, borderRadius: radii.pill, paddingHorizontal: 9, paddingVertical: 5, fontSize: 9, fontWeight: '800' },
+  badgeActive: { color: colors.goldBright, borderWidth: 1, borderColor: colors.goldSoft },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  emptyTitle: { fontSize: 20, fontWeight: '900', color: colors.text },
+  emptyText: { color: colors.textMuted, marginTop: 8, textAlign: 'center', lineHeight: 20 },
+  bottomNav: { flexDirection: 'row', alignItems: 'center', minHeight: 70, borderTopWidth: 1, borderTopColor: colors.borderSoft, backgroundColor: colors.background },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+  navText: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
+  navTextActive: { color: colors.goldBright },
+  recordNav: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4 },
+  recordNavText: { color: colors.background, fontSize: 24 },
+});
