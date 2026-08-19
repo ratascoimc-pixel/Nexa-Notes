@@ -264,6 +264,3 @@ const s = StyleSheet.create({
   libraryText: { color: colors.textMuted, marginTop: 5, lineHeight: 18, paddingRight: 22, fontSize: 12 },
   arrow: { color: colors.goldBright, fontSize: 34, marginLeft: 'auto' },
 });
-grep -n '"name": "Notz"' app.json; npm run typecheck
-npm run typecheck
-node -p "require('./app.json').expo.name" && npm run typecheck && echo "NOTZ CHECK PASSED"

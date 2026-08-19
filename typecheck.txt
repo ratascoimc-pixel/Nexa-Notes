@@ -2,12 +2,3 @@
 > notz@1.4.0 typecheck
 > tsc --noEmit
 
-app/index.tsx(267,9): error TS1005: ';' expected.
-app/index.tsx(267,26): error TS1005: ';' expected.
-app/index.tsx(267,36): error TS1434: Unexpected keyword or identifier.
-app/index.tsx(267,40): error TS1434: Unexpected keyword or identifier.
-app/index.tsx(268,1): error TS1434: Unexpected keyword or identifier.
-app/index.tsx(268,5): error TS1434: Unexpected keyword or identifier.
-app/index.tsx(269,9): error TS1005: ';' expected.
-app/index.tsx(269,50): error TS1005: ';' expected.
-app/index.tsx(269,72): error TS1005: ';' expected.
