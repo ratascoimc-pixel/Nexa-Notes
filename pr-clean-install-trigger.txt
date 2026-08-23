@@ -1,0 +1,1 @@
+Run the verified clean-install NOTZ beta build with Android package com.masterkeyone.notzbeta.
