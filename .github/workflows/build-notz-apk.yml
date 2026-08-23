@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 40
     env:
       CI: 1
+      NODE_ENV: production
       NPM_CONFIG_LEGACY_PEER_DEPS: true
     steps:
       - name: Checkout
@@ -58,6 +59,11 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
 
+      - name: Use persistent NOTZ signing key
+        run: |
+          cp ~/.android/debug.keystore android/app/debug.keystore
+          ls -l android/app/debug.keystore
+
       - name: Set increasing Android version code
         run: |
           python - <<'PY'
@@ -73,14 +79,14 @@ jobs:
           print('Android versionCode set to', run_number)
           PY
 
-      - name: Build installable APK
+      - name: Build standalone release APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk NOTZ-latest.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk NOTZ-latest.apk
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -96,4 +102,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete notz-latest --yes --cleanup-tag || true
-          gh release create notz-latest NOTZ-latest.apk --target main --title "NOTZ Android Beta" --notes "Latest installable Android beta of NOTZ by Master Key One. If you installed an older beta signed before August 22, 2026, uninstall that copy once before installing this build."
+          gh release create notz-latest NOTZ-latest.apk --target main --title "NOTZ Android Beta" --notes "Latest standalone Android beta of NOTZ by Master Key One. JavaScript is bundled inside the APK; Metro and Expo Go are not required. If you installed an older beta signed before the corrected build setup, uninstall that copy once before installing this build."
