@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -90,9 +92,9 @@ jobs:
           retention-days: 30
 
       - name: Publish stable test download
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.head_ref == 'notz-release-build' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete notz-latest --yes --cleanup-tag || true
-          gh release create notz-latest NOTZ-latest.apk --title "NOTZ Android Beta" --notes "Latest installable Android beta of NOTZ by Master Key One. If you installed an older beta signed before August 22, 2026, uninstall that copy once before installing this build. Future beta builds from this download page are intended to update normally."
+          gh release create notz-latest NOTZ-latest.apk --target main --title "NOTZ Android Beta" --notes "Latest installable Android beta of NOTZ by Master Key One. If you installed an older beta signed before August 22, 2026, uninstall that copy once before installing this build."
