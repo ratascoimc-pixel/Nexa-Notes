@@ -3,7 +3,7 @@
     "name": "Notz",
     "slug": "notz",
     "scheme": "notz",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/notz-icon.png",
     "userInterfaceStyle": "dark",
@@ -28,6 +28,7 @@
     },
     "android": {
       "package": "com.masterkeyone.notz",
+      "versionCode": 2,
       "permissions": [
         "RECORD_AUDIO",
         "FOREGROUND_SERVICE",
