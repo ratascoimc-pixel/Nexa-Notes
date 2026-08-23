@@ -11,7 +11,9 @@
   "dependencies": {
     "expo": "~54.0.0",
     "expo-audio": "~1.0.0",
+    "expo-constants": "18.0.14",
     "expo-file-system": "~19.0.0",
+    "expo-linking": "8.0.12",
     "expo-router": "~6.0.0",
     "expo-sharing": "~14.0.0",
     "expo-print": "~15.0.0",
