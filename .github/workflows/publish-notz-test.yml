@@ -1,0 +1,27 @@
+name: Publish NOTZ Test APK
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-apk:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download successful NOTZ APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 32607795607 -R "$GITHUB_REPOSITORY" -n NOTZ-v1.4-Android -D downloaded
+
+      - name: Publish stable test download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f downloaded/NOTZ-v1.4.apk
+          gh release delete notz-v1.4-test -R "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create notz-v1.4-test downloaded/NOTZ-v1.4.apk -R "$GITHUB_REPOSITORY" --title "NOTZ v1.4 Android Test" --notes "Installable Android test build of NOTZ by Master Key One."
