@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: write
@@ -16,46 +14,85 @@ jobs:
     timeout-minutes: 40
     env:
       CI: 1
+      NODE_ENV: production
       NPM_CONFIG_LEGACY_PEER_DEPS: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Restore NOTZ beta signing key
+        id: signing-key-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: notz-beta-signing-key-v1
+
+      - name: Create NOTZ beta signing key
+        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NOTZ Beta,O=Master Key One,C=US" -noprompt
+
       - name: Install Expo-compatible dependencies
         run: npm install --legacy-peer-deps
+
       - name: Typecheck
         run: npm run typecheck
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
+
+      - name: Set increasing Android version code
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+          p = Path('android/app/build.gradle')
+          s = p.read_text()
+          run_number = os.environ['GITHUB_RUN_NUMBER']
+          s, n = re.subn(r'versionCode\s+\d+', f'versionCode {run_number}', s, count=1)
+          if n != 1:
+              raise SystemExit('Could not set Android versionCode')
+          p.write_text(s)
+          print('Android versionCode set to', run_number)
+          PY
+
       - name: Build installable APK
         run: |
           chmod +x android/gradlew
           cd android
           ./gradlew assembleDebug --no-daemon
+
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk NOTZ-v1.4.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk NOTZ-latest.apk
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NOTZ-v1.4-Android
-          path: NOTZ-v1.4.apk
+          name: NOTZ-latest-Android
+          path: NOTZ-latest.apk
           if-no-files-found: error
           retention-days: 30
-      - name: Publish test release
+
+      - name: Publish stable test download
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete notz-v1.4-test --yes --cleanup-tag || true
-          gh release create notz-v1.4-test NOTZ-v1.4.apk --title "NOTZ v1.4 Android Test" --notes "Installable Android test build of NOTZ by Master Key One."
+          gh release delete notz-latest --yes --cleanup-tag || true
+          gh release create notz-latest NOTZ-latest.apk --title "NOTZ Android Beta" --notes "Latest installable Android beta of NOTZ by Master Key One. If you installed an older beta signed before August 22, 2026, uninstall that copy once before installing this build. Future beta builds from this download page are intended to update normally."
