@@ -1,0 +1,27 @@
+name: Publish NOTZ Clean Install APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-clean-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download current clean-package APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download notz-latest --repo "$GITHUB_REPOSITORY" --pattern 'NOTZ-latest.apk' --dir .
+          mv NOTZ-latest.apk NOTZ-clean-install-1.4.3.apk
+
+      - name: Publish unique clean-install release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete notz-clean-install-143 --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create notz-clean-install-143 NOTZ-clean-install-1.4.3.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "NOTZ 1.4.3 Clean Install" --notes "Fresh Android beta install of NOTZ by Master Key One. This build uses the new Android package com.masterkeyone.notzbeta so Android treats it as a new app rather than trying to update the previous beta."
