@@ -1,0 +1,1 @@
+Trigger clean-install NOTZ Android beta build with package com.masterkeyone.notzbeta.
