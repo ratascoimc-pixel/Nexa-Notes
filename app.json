@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "Notz",
-    "slug": "nexa-notes",
-    "scheme": "nexanotes",
+    "slug": "notz",
+    "scheme": "notz",
     "version": "1.4.0",
     "orientation": "portrait",
     "icon": "./assets/notz-icon.png",
@@ -19,7 +19,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nexanotes.app",
+      "bundleIdentifier": "com.masterkeyone.notz",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -27,7 +27,7 @@
       }
     },
     "android": {
-      "package": "com.nexanotes.app",
+      "package": "com.masterkeyone.notz",
       "permissions": [
         "RECORD_AUDIO",
         "FOREGROUND_SERVICE",
