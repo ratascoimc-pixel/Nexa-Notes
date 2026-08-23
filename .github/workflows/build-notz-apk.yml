@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 40
     env:
       CI: 1
-      NODE_ENV: production
       NPM_CONFIG_LEGACY_PEER_DEPS: true
     steps:
       - name: Checkout
@@ -51,7 +50,7 @@ jobs:
           keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=NOTZ Beta,O=Master Key One,C=US" -noprompt
 
       - name: Install Expo-compatible dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --include=dev --legacy-peer-deps
 
       - name: Typecheck
         run: npm run typecheck
