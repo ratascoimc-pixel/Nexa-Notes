@@ -92,7 +92,7 @@ jobs:
           retention-days: 30
 
       - name: Publish stable test download
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.head_ref == 'notz-release-build' && github.event.pull_request.head.repo.full_name == github.repository)
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.head_ref == 'notz-apk-test' && github.event.pull_request.head.repo.full_name == github.repository)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
