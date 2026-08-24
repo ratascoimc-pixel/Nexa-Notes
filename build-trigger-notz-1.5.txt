@@ -1,0 +1,1 @@
+Build the refined NOTZ 1.5 Android beta and publish the stable notz-latest APK release.
