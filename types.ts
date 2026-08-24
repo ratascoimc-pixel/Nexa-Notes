@@ -16,7 +16,9 @@ export type OrganizationMode =
   | 'simple-outline'
   | 'summary'
   | 'key-points'
+  | 'detailed-notes'
   | 'qa-review'
+  | 'flashcards'
   | 'references';
 
 export type OrganizedSection = {
@@ -40,6 +42,7 @@ export type NotzRecording = {
   durationMs: number;
   segmentUris: string[];
   transcript?: string;
+  transcriptPdfUri?: string;
   notes?: StudyNotes;
   documents?: Partial<Record<OrganizationMode, OrganizedDocument>>;
   pdfUri?: string;

@@ -5,7 +5,7 @@ import { colors, radii } from '../constants/theme';
 import { listRecordings } from '../lib/store';
 import { NotzRecording } from '../types';
 
-const FILTERS = ['All', 'Study Notes', 'Outlines', 'Transcripts'] as const;
+const FILTERS = ['All', 'Study Notz', 'Outlines', 'Summaries', 'Transcripts'] as const;
 type Filter = typeof FILTERS[number];
 
 const duration = (ms: number) => {
@@ -21,15 +21,17 @@ function hasOutline(item: NotzRecording) {
 }
 
 function category(item: NotzRecording) {
-  if (item.notes) return 'STUDY NOTES';
+  if (item.notes) return 'STUDY NOTZ';
   if (hasOutline(item)) return 'OUTLINE';
+  if (item.documents?.summary) return 'SUMMARY';
   if (item.transcript) return 'TRANSCRIPT';
-  return 'RECORDING';
+  return item.segmentUris.length ? 'RECORDING' : 'SAVED OUTPUTS';
 }
 
 export default function Library() {
   const params = useLocalSearchParams<{ filter?: string }>();
-  const requested = FILTERS.find((value) => value.toLowerCase() === String(params.filter || '').toLowerCase());
+  const rawRequested = String(params.filter || '').toLowerCase().replace('study notes', 'study notz');
+  const requested = FILTERS.find((value) => value.toLowerCase() === rawRequested);
   const [items, setItems] = useState<NotzRecording[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -48,8 +50,9 @@ export default function Library() {
     const needle = query.trim().toLowerCase();
     return items.filter((item) => {
       if (needle && !item.title.toLowerCase().includes(needle) && !String(item.transcript || '').toLowerCase().includes(needle)) return false;
-      if (filter === 'Study Notes' && !item.notes) return false;
+      if (filter === 'Study Notz' && !item.notes) return false;
       if (filter === 'Outlines' && !hasOutline(item)) return false;
+      if (filter === 'Summaries' && !item.documents?.summary) return false;
       if (filter === 'Transcripts' && !item.transcript) return false;
       return true;
     });
@@ -97,22 +100,30 @@ export default function Library() {
               <Text style={s.emptyText}>{items.length ? 'Try another filter or search term.' : 'Tap New Recording to capture your first note.'}</Text>
             </View>
           )}
-          renderItem={({ item }) => (
-            <Pressable style={s.card} onPress={() => router.push(`/recording/${item.id}`)}>
-              <View style={s.cardTop}>
-                <Text style={s.category}>{category(item)}</Text>
-                <Text style={s.arrow}>›</Text>
-              </View>
-              <Text style={s.title}>{item.title}</Text>
-              <Text style={s.meta}>{new Date(item.createdAt).toLocaleDateString()} • {duration(item.durationMs)} • {item.segmentUris.length} segment{item.segmentUris.length === 1 ? '' : 's'}</Text>
-              <View style={s.badges}>
-                <Badge label="Audio" active />
-                <Badge label="Transcript" active={Boolean(item.transcript)} />
-                <Badge label="Notes" active={Boolean(item.notes || Object.keys(item.documents || {}).length)} />
-                <Badge label="PDF" active={Boolean(item.pdfUri || Object.keys(item.outputPdfUris || {}).length)} />
-              </View>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const formatCount = (item.notes ? 1 : 0) + Object.keys(item.documents || {}).length;
+            const pdfCount = (item.transcriptPdfUri ? 1 : 0) + (item.pdfUri ? 1 : 0) + Object.keys(item.outputPdfUris || {}).length;
+            return (
+              <Pressable style={s.card} onPress={() => router.push(`/recording/${item.id}`)}>
+                <View style={s.cardTop}>
+                  <Text style={s.category}>{category(item)}</Text>
+                  <Text style={s.arrow}>›</Text>
+                </View>
+                <Text style={s.title}>{item.title}</Text>
+                <Text style={s.meta}>
+                  {new Date(item.createdAt).toLocaleDateString()} • {duration(item.durationMs)} • {item.segmentUris.length
+                    ? `${item.segmentUris.length} audio part${item.segmentUris.length === 1 ? '' : 's'}`
+                    : 'audio deleted'}
+                </Text>
+                <View style={s.badges}>
+                  <Badge label="Audio" active={Boolean(item.segmentUris.length)} />
+                  <Badge label="Transcript" active={Boolean(item.transcript)} />
+                  <Badge label={`Formats ${formatCount}`} active={Boolean(formatCount)} />
+                  <Badge label={`PDF ${pdfCount}`} active={Boolean(pdfCount)} />
+                </View>
+              </Pressable>
+            );
+          }}
         />
 
         <View style={s.bottomNav}>
@@ -140,21 +151,21 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrow: { color: colors.goldBright, fontSize: 10, fontWeight: '900', letterSpacing: 1.8 },
   heading: { color: colors.text, fontSize: 30, fontWeight: '900', marginTop: 2 },
-  newButton: { backgroundColor: colors.gold, borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 16 },
+  newButton: { backgroundColor: colors.gold, borderRadius: radii.pill, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: colors.goldBright },
   newButtonText: { color: colors.background, fontSize: 11, fontWeight: '900', letterSpacing: 0.7 },
-  search: { marginTop: 16, backgroundColor: colors.surface, borderRadius: radii.medium, borderWidth: 1, borderColor: colors.borderSoft, color: colors.text, paddingHorizontal: 16, paddingVertical: 13, fontSize: 14 },
+  search: { marginTop: 16, backgroundColor: colors.surface, borderRadius: radii.medium, borderWidth: 1, borderColor: colors.blueSoft, color: colors.text, paddingHorizontal: 16, paddingVertical: 13, fontSize: 14 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 },
   filter: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: radii.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderSoft },
-  filterActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  filterActive: { backgroundColor: colors.gold, borderColor: colors.goldBright },
   filterText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
   filterTextActive: { color: colors.background },
   list: { flex: 1, marginTop: 14 },
   listContent: { paddingBottom: 18 },
   emptyContent: { flexGrow: 1 },
-  card: { backgroundColor: colors.surface, borderRadius: radii.large, borderWidth: 1, borderColor: colors.borderSoft, padding: 17, marginBottom: 12 },
+  card: { backgroundColor: colors.surface, borderRadius: radii.large, borderWidth: 1, borderColor: colors.blueSoft, padding: 17, marginBottom: 12 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   category: { color: colors.goldBright, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
-  arrow: { color: colors.goldBright, fontSize: 27, lineHeight: 27 },
+  arrow: { color: colors.blueBright, fontSize: 27, lineHeight: 27 },
   title: { color: colors.text, fontSize: 17, fontWeight: '900', marginTop: 3 },
   meta: { color: colors.textMuted, fontSize: 11, marginTop: 7 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
@@ -167,6 +178,6 @@ const s = StyleSheet.create({
   navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
   navText: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
   navTextActive: { color: colors.goldBright },
-  recordNav: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4 },
+  recordNav: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4, borderWidth: 2, borderColor: colors.blueSoft },
   recordNavText: { color: colors.background, fontSize: 24 },
 });

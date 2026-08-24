@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { NotzRecording } from '../types';
+import { NotzRecording, OrganizationMode } from '../types';
 
 // Keep the legacy database filename so an in-place app upgrade keeps existing recordings.
 const DB = `${FileSystem.documentDirectory}nexa-notes-library.json`;
@@ -17,6 +17,11 @@ async function readAll(): Promise<NotzRecording[]> {
 
 async function writeAll(items: NotzRecording[]) {
   await FileSystem.writeAsStringAsync(DB, JSON.stringify(items, null, 2));
+}
+
+export async function deleteLocalFile(uri?: string) {
+  if (!uri) return;
+  try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
 }
 
 export async function listRecordings() {
@@ -43,17 +48,65 @@ export async function patchRecording(id: string, patch: Partial<NotzRecording>) 
   return saveRecording({ ...current, ...patch });
 }
 
+function nextStatus(current: NotzRecording, patch: Partial<NotzRecording>) {
+  const merged = { ...current, ...patch };
+  if (merged.notes || Object.keys(merged.documents || {}).length) return 'notes-ready' as const;
+  if (merged.transcript) return 'transcribed' as const;
+  return 'recorded' as const;
+}
+
+export async function deleteAudioOnly(id: string) {
+  const current = await getRecording(id);
+  if (!current) throw new Error('Recording not found');
+  for (const uri of current.segmentUris) await deleteLocalFile(uri);
+  return patchRecording(id, { segmentUris: [] });
+}
+
+export async function deleteTranscriptOnly(id: string) {
+  const current = await getRecording(id);
+  if (!current) throw new Error('Recording not found');
+  await deleteLocalFile(current.transcriptPdfUri);
+  const patch: Partial<NotzRecording> = { transcript: undefined, transcriptPdfUri: undefined, error: undefined };
+  patch.status = nextStatus(current, patch);
+  return patchRecording(id, patch);
+}
+
+export async function deleteStudyNotesOnly(id: string) {
+  const current = await getRecording(id);
+  if (!current) throw new Error('Recording not found');
+  await deleteLocalFile(current.pdfUri);
+  const patch: Partial<NotzRecording> = { notes: undefined, pdfUri: undefined };
+  patch.status = nextStatus(current, patch);
+  return patchRecording(id, patch);
+}
+
+export async function deleteOrganizedDocumentOnly(id: string, mode: OrganizationMode) {
+  const current = await getRecording(id);
+  if (!current) throw new Error('Recording not found');
+  await deleteLocalFile(current.outputPdfUris?.[mode]);
+
+  const documents = { ...(current.documents || {}) };
+  delete documents[mode];
+
+  const outputPdfUris = { ...(current.outputPdfUris || {}) };
+  delete outputPdfUris[mode];
+
+  const patch: Partial<NotzRecording> = { documents, outputPdfUris };
+  patch.status = nextStatus(current, patch);
+  return patchRecording(id, patch);
+}
+
 export async function deleteRecording(id: string) {
   const items = await readAll();
   const current = items.find((r) => r.id === id);
   if (current) {
-    for (const uri of current.segmentUris) {
-      try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-    }
-    const pdfs = [current.pdfUri, ...Object.values(current.outputPdfUris || {})].filter(Boolean) as string[];
-    for (const uri of pdfs) {
-      try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-    }
+    for (const uri of current.segmentUris) await deleteLocalFile(uri);
+    const pdfs = [
+      current.transcriptPdfUri,
+      current.pdfUri,
+      ...Object.values(current.outputPdfUris || {}),
+    ].filter(Boolean) as string[];
+    for (const uri of pdfs) await deleteLocalFile(uri);
   }
   await writeAll(items.filter((r) => r.id !== id));
 }
