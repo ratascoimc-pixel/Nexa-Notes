@@ -21,7 +21,7 @@ export function BrandHeader({ compact = false }: { compact?: boolean }) {
 const s = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   compactWrap: { gap: 10 },
-  logo: { width: 78, height: 78, borderRadius: 18 },
+  logo: { width: 64, height: 64, borderRadius: 15 },
   compactLogo: { width: 54, height: 54, borderRadius: 13 },
   copy: { flex: 1 },
   name: { color: colors.text, fontSize: 28, fontWeight: '900', letterSpacing: 5 },
