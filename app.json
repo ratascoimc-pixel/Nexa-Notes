@@ -35,7 +35,7 @@
         "FOREGROUND_SERVICE_MICROPHONE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/notz-icon.png",
+        "foregroundImage": "./assets/notz-icon-foreground.png",
         "backgroundColor": "#020812"
       }
     }
