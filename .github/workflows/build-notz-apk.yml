@@ -56,6 +56,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test transcription recovery
+        run: node tests/transcription.cjs
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
 
@@ -72,7 +75,7 @@ jobs:
           p = Path('android/app/build.gradle')
           s = p.read_text()
           run_number = os.environ['GITHUB_RUN_NUMBER']
-          s, n = re.subn(r'versionCode\s+\d+', f'versionCode {run_number}', s, count=1)
+          s, n = re.subn(r'versionCode\s+\d+', f'versionCode {1000 + int(run_number)}', s, count=1)
           if n != 1:
               raise SystemExit('Could not set Android versionCode')
           p.write_text(s)
@@ -102,4 +105,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete notz-latest --yes --cleanup-tag || true
-          gh release create notz-latest NOTZ-latest.apk --target main --title "NOTZ Android Beta" --notes "Latest standalone Android beta of NOTZ by Master Key One. JavaScript is bundled inside the APK; Metro and Expo Go are not required. If you installed an older beta signed before the corrected build setup, uninstall that copy once before installing this build."
+          gh release create notz-latest NOTZ-latest.apk --target "$GITHUB_SHA" --title "NOTZ Android Beta" --notes "NOTZ 1.5.1: preserves completed transcription parts and resumes after a later failure. JavaScript is bundled inside the APK; Metro and Expo Go are not required. If you installed an older beta signed before the corrected build setup, uninstall that copy once before installing this build."

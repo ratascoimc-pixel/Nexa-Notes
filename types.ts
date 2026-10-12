@@ -42,6 +42,7 @@ export type NotzRecording = {
   durationMs: number;
   segmentUris: string[];
   transcript?: string;
+  transcriptionParts?: { uri: string; text: string }[];
   transcriptPdfUri?: string;
   notes?: StudyNotes;
   documents?: Partial<Record<OrganizationMode, OrganizedDocument>>;

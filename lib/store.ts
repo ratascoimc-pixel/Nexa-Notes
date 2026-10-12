@@ -66,7 +66,7 @@ export async function deleteTranscriptOnly(id: string) {
   const current = await getRecording(id);
   if (!current) throw new Error('Recording not found');
   await deleteLocalFile(current.transcriptPdfUri);
-  const patch: Partial<NotzRecording> = { transcript: undefined, transcriptPdfUri: undefined, error: undefined };
+  const patch: Partial<NotzRecording> = { transcript: undefined, transcriptionParts: undefined, transcriptPdfUri: undefined, error: undefined };
   patch.status = nextStatus(current, patch);
   return patchRecording(id, patch);
 }

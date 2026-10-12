@@ -18,13 +18,23 @@ export async function checkApi(): Promise<boolean> {
   }
 }
 
-export async function transcribeRecording(recording: NotzRecording): Promise<string> {
+export async function transcribeRecording(
+  recording: NotzRecording,
+  onProgress?: (parts: { uri: string; text: string }[]) => Promise<void>,
+): Promise<string> {
   const base = requireApi();
   const parts: string[] = [];
+  const completed: { uri: string; text: string }[] = [];
 
   // Keep the proven v1.4-compatible endpoint for maximum reliability with the existing backend.
   for (let i = 0; i < recording.segmentUris.length; i += 1) {
     const uri = recording.segmentUris[i];
+    const saved = recording.transcriptionParts?.[i];
+    if (saved?.uri === uri) {
+      parts.push(saved.text);
+      completed.push(saved);
+      continue;
+    }
     const form = new FormData();
     form.append('audio', {
       uri,
@@ -38,7 +48,11 @@ export async function transcribeRecording(recording: NotzRecording): Promise<str
     const response = await fetch(`${base}/transcribe`, { method: 'POST', body: form });
     if (!response.ok) throw new Error((await response.text()) || `Transcription failed on part ${i + 1}.`);
     const data = await response.json();
-    parts.push(String(data.text || '').trim());
+    if (typeof data.text !== 'string') throw new Error(`Invalid transcription response on part ${i + 1}.`);
+    const text = data.text.trim();
+    parts.push(text);
+    completed.push({ uri, text });
+    if (onProgress) await onProgress([...completed]);
   }
   return parts.filter(Boolean).join('\n\n');
 }

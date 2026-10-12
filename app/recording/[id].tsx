@@ -150,7 +150,14 @@ export default function RecordingDetail() {
     setBusy('transcribing');
     try {
       await patchRecording(id, { status: 'transcribing', error: undefined });
-      const text = await transcribeRecording(item);
+      const text = await transcribeRecording(item, async (parts) => {
+        const partial = parts.map((part) => part.text).filter(Boolean).join('\n\n');
+        const updated = await patchRecording(id, {
+          transcriptionParts: parts,
+          ...(item.transcript ? {} : { transcript: partial }),
+        });
+        setItem(updated);
+      });
       await deleteLocalFile(item.transcriptPdfUri);
       const updated = await patchRecording(id, {
         transcript: text,
