@@ -1,0 +1,21 @@
+const ts = require('typescript');
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('node:assert/strict');
+let db = JSON.stringify([{id:'test',title:'Old',createdAt:'2026-10-12',durationMs:1000,segmentUris:['audio'],transcript:'Saved words',transcriptionParts:[{uri:'audio',text:'Saved words'}],notes:{title:'Old',summary:'Saved study notes'},documents:{'detailed-outline':{title:'Old',sections:[{heading:'Saved outline'}]}},status:'notes-ready',transcriptPdfUri:'transcript.pdf',pdfUri:'study.pdf',outputPdfUris:{'detailed-outline':'outline.pdf'}}]);
+const deleted=[];
+const mock={documentDirectory:'memory/',getInfoAsync:async()=>({exists:true}),readAsStringAsync:async()=>db,writeAsStringAsync:async(_,value)=>{db=value;},deleteAsync:async(uri)=>{deleted.push(uri);}};
+const code=ts.transpileModule(fs.readFileSync('lib/store.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+const storeExports={};
+vm.runInNewContext(code,{exports:storeExports,require:(name)=>{assert.equal(name,'expo-file-system/legacy');return mock;}});
+(async()=>{
+ await assert.rejects(storeExports.renameRecording('test','   '),/enter a name/);
+ assert.equal(JSON.parse(db)[0].title,'Old');
+ await storeExports.renameRecording('test','  My new note  ');
+ const saved=JSON.parse(db)[0];
+ assert.equal(saved.title,'My new note');assert.equal(saved.notes.title,saved.title);assert.equal(saved.documents['detailed-outline'].title,saved.title);
+ assert.equal(saved.transcript,'Saved words');assert.equal(saved.notes.summary,'Saved study notes');assert.equal(saved.documents['detailed-outline'].sections[0].heading,'Saved outline');assert.deepEqual(saved.segmentUris,['audio']);assert.equal(saved.transcriptionParts[0].text,'Saved words');
+ assert.equal(saved.transcriptPdfUri,undefined);assert.equal(saved.pdfUri,undefined);assert.equal(saved.outputPdfUris,undefined);assert.deepEqual(deleted.sort(),['outline.pdf','study.pdf','transcript.pdf']);
+ assert.equal((await storeExports.getRecording('test')).title,'My new note');
+ console.log('PASS: offline rename persists, preserves audio and all formats, updates export titles, rejects blank names');
+})().catch(e=>{console.error(e);process.exitCode=1;});

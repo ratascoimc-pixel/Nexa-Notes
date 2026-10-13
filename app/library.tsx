@@ -104,7 +104,7 @@ export default function Library() {
             const formatCount = (item.notes ? 1 : 0) + Object.keys(item.documents || {}).length;
             const pdfCount = (item.transcriptPdfUri ? 1 : 0) + (item.pdfUri ? 1 : 0) + Object.keys(item.outputPdfUris || {}).length;
             return (
-              <Pressable style={s.card} onPress={() => router.push(`/recording/${item.id}`)}>
+              <Pressable style={s.card} onPress={() => { const section = filter === 'Study Notz' ? 'study-notes' : filter === 'Outlines' ? (item.documents?.['detailed-outline'] ? 'detailed-outline' : 'simple-outline') : filter === 'Summaries' ? 'summary' : filter === 'Transcripts' ? 'transcript' : undefined; router.push({ pathname: '/recording/[id]', params: { id: item.id, ...(section ? { section } : {}) } }); }}>
                 <View style={s.cardTop}>
                   <Text style={s.category}>{category(item)}</Text>
                   <Text style={s.arrow}>›</Text>

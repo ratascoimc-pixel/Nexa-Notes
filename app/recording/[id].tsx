@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { BrandHeader } from '../../components/BrandHeader';
@@ -20,6 +20,7 @@ import {
   deleteTranscriptOnly,
   getRecording,
   patchRecording,
+  renameRecording,
 } from '../../lib/store';
 import { generateOrganizedDocument, generateStudyNotes, transcribeRecording } from '../../services/api';
 import { NotzRecording, OrganizedDocument, OrganizationMode } from '../../types';
@@ -36,9 +37,26 @@ const ORGANIZE_OPTIONS: { mode: OrganizationMode; label: string; short: string }
 ];
 
 export default function RecordingDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, section } = useLocalSearchParams<{ id: string; section?: string }>();
   const [item, setItem] = useState<NotzRecording | null>(null);
   const [busy, setBusy] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const positions = useRef<Record<string, number>>({});
+  const pendingSection = useRef(section || '');
+  const jumpTo = (key: string) => {
+    const y = positions.current[key];
+    if (typeof y === 'number') scroll.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  };
+  const locate = (key: string, y: number) => {
+    positions.current[key] = y;
+    if (pendingSection.current === key) {
+      pendingSection.current = '';
+      requestAnimationFrame(() => jumpTo(key));
+    }
+  };
   const [audioPart, setAudioPart] = useState(0);
   const [showAudioParts, setShowAudioParts] = useState(false);
   const loadedUri = useRef('');
@@ -90,7 +108,15 @@ export default function RecordingDetail() {
     return <View style={s.center}><Text style={s.loading}>Loading…</Text></View>;
   }
 
-  const rename = async (value: string) => setItem(await patchRecording(id, { title: value }));
+  const saveName = async () => {
+    setSavingName(true);
+    try {
+      setItem(await renameRecording(id, draftName));
+      setEditingName(false);
+    } catch (error: any) {
+      Alert.alert('Rename', error?.message || 'Could not save the name.');
+    } finally { setSavingName(false); }
+  };
 
   const togglePlayback = async () => {
     if (!item.segmentUris.length) return;
@@ -330,17 +356,24 @@ export default function RecordingDetail() {
   const generated = ORGANIZE_OPTIONS.filter((option) => Boolean(item.documents?.[option.mode]));
 
   return (
-    <ScrollView contentContainerStyle={s.root} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={s.root} showsVerticalScrollIndicator={false}>
       <BrandHeader compact />
 
       <View style={s.titleBlock}>
-        <TextInput
-          style={s.title}
-          value={item.title}
-          onChangeText={(value) => setItem({ ...item, title: value })}
-          onEndEditing={(event) => rename(event.nativeEvent.text)}
-          selectionColor={colors.goldBright}
-        />
+        <Text style={s.title}>{item.title}</Text>
+        <Pressable accessibilityRole="button" style={s.renameButton} onPress={() => { setDraftName(item.title); setEditingName(true); }}>
+          <Text style={s.actionText}>RENAME</Text>
+        </Pressable>
+        <Modal transparent visible={editingName} animationType="fade" onRequestClose={() => { if (!savingName) setEditingName(false); }}>
+          <View style={s.modalShade}><View style={s.modalCard}>
+            <Text style={s.sectionTitle}>Rename recording / note</Text>
+            <TextInput autoFocus accessibilityLabel="Recording name" style={s.nameInput} value={draftName} onChangeText={setDraftName} editable={!savingName} maxLength={200} returnKeyType="done" onSubmitEditing={() => { if (!savingName) void saveName(); }} selectionColor={colors.goldBright} />
+            <View style={s.partNav}>
+              <Pressable style={s.partButton} disabled={savingName} onPress={() => setEditingName(false)}><Text style={s.partButtonText}>CANCEL</Text></Pressable>
+              <Pressable style={s.partButton} disabled={savingName || !draftName.trim()} onPress={() => void saveName()}><Text style={s.partButtonText}>{savingName ? 'SAVING…' : 'SAVE NAME'}</Text></Pressable>
+            </View>
+          </View></View>
+        </Modal>
         <Text style={s.meta}>
           {new Date(item.createdAt).toLocaleString()} • {duration(item.durationMs)} • {item.segmentUris.length
             ? `${item.segmentUris.length} protected audio segment${item.segmentUris.length === 1 ? '' : 's'}`
@@ -348,7 +381,16 @@ export default function RecordingDetail() {
         </Text>
       </View>
 
-      <Section title="Listen to the recording" eyebrow="AUDIO">
+      <Section title="Jump to" eyebrow="SAVED CONTENT — NO CREDITS NEEDED">
+        <View style={s.modeGrid}>
+          <ModeButton label="Recording" onPress={() => jumpTo('audio')} />
+          {item.transcript ? <ModeButton label="Transcript" onPress={() => jumpTo('transcript')} /> : null}
+          {item.notes ? <ModeButton label="Study Notes" onPress={() => jumpTo('study-notes')} /> : null}
+          {generated.map((option) => <ModeButton key={option.mode} label={option.label} onPress={() => jumpTo(option.mode)} />)}
+        </View>
+      </Section>
+
+      <Section onLayoutY={(y) => locate('audio', y)} title="Listen to the recording" eyebrow="AUDIO">
         {item.segmentUris.length ? (
           <>
             <View style={s.playerRow}>
@@ -447,7 +489,7 @@ export default function RecordingDetail() {
       ) : null}
 
       {item.transcript ? (
-        <Section title="Transcript" eyebrow="ORIGINAL">
+        <Section onLayoutY={(y) => locate('transcript', y)} title="Transcript" eyebrow="ORIGINAL">
           <Text style={s.body}>{item.transcript}</Text>
           <OutputActions
             sendLabel="SEND TRANSCRIPT"
@@ -458,13 +500,13 @@ export default function RecordingDetail() {
           />
         </Section>
       ) : (
-        <Section title="Transcript" eyebrow="ORIGINAL">
+        <Section onLayoutY={(y) => locate('transcript', y)} title="Transcript" eyebrow="ORIGINAL">
           <Text style={s.muted}>Your full transcript will appear here after processing.</Text>
         </Section>
       )}
 
       {item.notes ? (
-        <Section title="Study Notz" eyebrow="ORGANIZED">
+        <Section onLayoutY={(y) => locate('study-notes', y)} title="Study Notz" eyebrow="ORGANIZED">
           <Subheading>Main Theme</Subheading>
           <Text style={s.body}>{item.notes.mainTheme}</Text>
           <Subheading>Key Points</Subheading>
@@ -493,7 +535,7 @@ export default function RecordingDetail() {
         const document = item.documents?.[option.mode];
         if (!document) return null;
         return (
-          <Section key={option.mode} title={option.label} eyebrow="ORGANIZED">
+          <Section key={option.mode} onLayoutY={(y) => locate(option.mode, y)} title={option.label} eyebrow="ORGANIZED">
             {document.summary ? <Text style={s.summary}>{document.summary}</Text> : null}
             {document.sections.map((section, sectionIndex) => (
               <View key={`${option.mode}-${sectionIndex}`} style={s.documentSection}>
@@ -584,7 +626,7 @@ function OutputActions({
   );
 }
 
-function ModeButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) {
+function ModeButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable disabled={disabled} onPress={onPress} style={[s.modeButton, disabled && s.disabled]}>
       <Text style={s.modeButtonText}>{label}</Text>
@@ -592,9 +634,9 @@ function ModeButton({ label, onPress, disabled }: { label: string; onPress: () =
   );
 }
 
-function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: any }) {
+function Section({ title, eyebrow, children, onLayoutY }: { title: string; eyebrow?: string; children: any; onLayoutY?: (y: number) => void }) {
   return (
-    <View style={s.section}>
+    <View style={s.section} onLayout={onLayoutY ? (event) => onLayoutY(event.nativeEvent.layout.y) : undefined}>
       {eyebrow ? <Text style={s.sectionEyebrow}>{eyebrow}</Text> : null}
       <Text style={s.sectionTitle}>{title}</Text>
       {children}
@@ -610,6 +652,10 @@ const s = StyleSheet.create({
   root: { padding: 20, paddingBottom: 60, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   loading: { color: colors.textMuted },
+  renameButton: { alignSelf: 'flex-start', padding: 10, marginTop: 8, borderWidth: 1, borderColor: colors.goldSoft, borderRadius: radii.medium },
+  modalShade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: colors.surface, padding: 20, borderRadius: radii.large, borderWidth: 1, borderColor: colors.goldSoft },
+  nameInput: { color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: radii.medium, padding: 12, marginTop: 12 },
   titleBlock: { marginTop: 22 },
   title: { fontSize: 25, fontWeight: '900', color: colors.text, padding: 0 },
   meta: { fontSize: 11, color: colors.textMuted, marginTop: 7, lineHeight: 17 },

@@ -48,6 +48,27 @@ export async function patchRecording(id: string, patch: Partial<NotzRecording>) 
   return saveRecording({ ...current, ...patch });
 }
 
+export async function renameRecording(id: string, value: string) {
+  const title = value.trim();
+  if (!title) throw new Error('Please enter a name.');
+  const current = await getRecording(id);
+  if (!current) throw new Error('Recording not found');
+  const documents = { ...current.documents };
+  for (const mode of Object.keys(documents) as OrganizationMode[]) {
+    if (documents[mode]) documents[mode] = { ...documents[mode]!, title };
+  }
+  const updated = await patchRecording(id, {
+    title,
+    notes: current.notes ? { ...current.notes, title } : undefined,
+    documents: current.documents ? documents : undefined,
+    transcriptPdfUri: undefined,
+    pdfUri: undefined,
+    outputPdfUris: undefined,
+  });
+  await Promise.all([current.transcriptPdfUri, current.pdfUri, ...Object.values(current.outputPdfUris || {})].map(deleteLocalFile));
+  return updated;
+}
+
 function nextStatus(current: NotzRecording, patch: Partial<NotzRecording>) {
   const merged = { ...current, ...patch };
   if (merged.notes || Object.keys(merged.documents || {}).length) return 'notes-ready' as const;

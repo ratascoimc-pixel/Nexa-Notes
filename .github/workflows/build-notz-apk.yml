@@ -60,7 +60,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test transcription recovery
-        run: node tests/transcription.cjs
+        run: node tests/transcription.cjs && node tests/rename.cjs
 
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean
@@ -108,4 +108,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete notz-latest --yes --cleanup-tag || true
-          gh release create notz-latest NOTZ-latest.apk --target "$GITHUB_SHA" --title "NOTZ Android Beta" --notes "NOTZ 1.5.1: preserves completed transcription parts and resumes after a later failure. JavaScript is bundled inside the APK; Metro and Expo Go are not required. If you installed an older beta signed before the corrected build setup, uninstall that copy once before installing this build."
+          gh release create notz-latest NOTZ-latest.apk --target "$GITHUB_SHA" --title "NOTZ Android Beta" --notes "NOTZ 1.5.2: explicit Rename and saved-format Jump to controls, including direct opening from filtered Library views. Preserves completed transcription parts and resumes after a later failure. JavaScript is bundled inside the APK; Metro and Expo Go are not required. If you installed an older beta signed before the corrected build setup, uninstall that copy once before installing this build."
