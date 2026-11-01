@@ -60,6 +60,7 @@ export default function Library() {
 
   return (
     <SafeAreaView style={s.safe}>
+      <Pressable onPress={() => router.push("/shared")} style={{padding:16}}><Text style={{color:colors.blue,fontWeight:"700"}}>Shared Notes →</Text></Pressable>
       <View style={s.root}>
         <View style={s.headerRow}>
           <View>
@@ -110,6 +111,7 @@ export default function Library() {
                   <Text style={s.arrow}>›</Text>
                 </View>
                 <Text style={s.title}>{item.title}</Text>
+                <Pressable onPress={(event) => { event.stopPropagation(); router.push({pathname:"/shared",params:{source:item.id}}); }}><Text style={{color:colors.blue,paddingVertical:10}}>Share as an editable note →</Text></Pressable>
                 <Text style={s.meta}>
                   {new Date(item.createdAt).toLocaleDateString()} • {duration(item.durationMs)} • {item.segmentUris.length
                     ? `${item.segmentUris.length} audio part${item.segmentUris.length === 1 ? '' : 's'}`

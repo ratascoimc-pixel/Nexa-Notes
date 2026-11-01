@@ -94,3 +94,33 @@ export async function generateOrganizedDocument(
   }
   throw new Error('Organization is taking longer than expected. Please try again.');
 }
+
+// Audio-based speaker separation; plain text cannot reliably identify voices.
+export async function generateConversation(recording: NotzRecording, progress?: (part: number,total: number) => void): Promise<OrganizedDocument> {
+  if (!recording.segmentUris.length) throw new Error('Conversation needs the original audio.');
+  const sections: OrganizedDocument['sections'] = [];
+  for (let i=0;i<recording.segmentUris.length;i++) {
+    progress?.(i+1,recording.segmentUris.length);
+    const form = new FormData();
+    form.append('audio',{uri:recording.segmentUris[i],name:`conversation-${i+1}.m4a`,type:'audio/mp4'} as any);
+    const response = await conversationRequest(`${requireApi()}/conversation`,{method:'POST',body:form});
+    if (response.status === 404) throw new Error('The transcription server needs the Conversation update before this option can run.');
+    if (!response.ok) throw new Error('Could not separate speakers. ' + (await response.text()).slice(0,250));
+    const data = await response.json();
+    if (!Array.isArray(data.turns) || !data.turns.length) throw new Error('No speaker turns returned. Try a recording with clear speech.');
+    for (const turn of data.turns) {
+      if (typeof turn.speaker !== 'string' || typeof turn.text !== 'string' || typeof turn.start !== 'number') throw new Error('Invalid speaker result.');
+      const seconds=Math.max(0,Math.floor(turn.start));
+      sections.push({heading:`${recording.segmentUris.length>1 ? `Part ${i+1} · ` : ''}${turn.speaker} · ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,body:turn.text,items:[],qa:[]});
+    }
+  }
+  return {title:recording.title,mode:'conversation',summary:recording.segmentUris.length>1 ? 'Speaker labels and timestamps restart in each audio part. The same label in different parts may refer to different people. Review speaker assignments for accuracy.' : 'Conversation separated by voice. Speaker names are not identified. Review speaker assignments for accuracy.',sections};
+}
+
+async function conversationRequest(url: string, init: RequestInit): Promise<Response> {
+ const controller = new AbortController();
+ const timeout = setTimeout(()=>controller.abort(),180000);
+ try { return await fetch(url,{...init,signal:controller.signal}); }
+ catch (error:any) { throw new Error(error?.name === 'AbortError' ? 'Speaker separation took too long. Your original audio is still saved; try again with NOTZ open.' : 'Could not reach the conversation service. Check your connection.'); }
+ finally { clearTimeout(timeout); }
+}

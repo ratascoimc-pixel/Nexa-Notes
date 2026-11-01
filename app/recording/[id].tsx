@@ -22,12 +22,13 @@ import {
   patchRecording,
   renameRecording,
 } from '../../lib/store';
-import { generateOrganizedDocument, generateStudyNotes, transcribeRecording } from '../../services/api';
+import { generateConversation, generateOrganizedDocument, generateStudyNotes, transcribeRecording } from '../../services/api';
 import { NotzRecording, OrganizedDocument, OrganizationMode } from '../../types';
 
 const ORGANIZE_OPTIONS: { mode: OrganizationMode; label: string; short: string }[] = [
   { mode: 'detailed-outline', label: 'Detailed Outline', short: 'Detailed Outline' },
   { mode: 'simple-outline', label: 'Simple Outline', short: 'Simple Outline' },
+  { mode: 'conversation', label: 'Conversation', short: 'Conversation' },
   { mode: 'summary', label: 'Summary', short: 'Summary' },
   { mode: 'key-points', label: 'Key Points', short: 'Key Points' },
   { mode: 'detailed-notes', label: 'Detailed Notes', short: 'Detailed Notes' },
@@ -221,10 +222,15 @@ export default function RecordingDetail() {
   };
 
   const organize = async (mode: OrganizationMode, label: string) => {
-    if (!item.transcript) return;
+    if (mode === 'conversation' ? !item.segmentUris.length : !item.transcript) {
+      Alert.alert(label, mode === 'conversation' ? 'Conversation needs the original audio to separate speakers accurately.' : 'Transcribe this recording first.');
+      return;
+    }
     setBusy(`creating ${label.toLowerCase()}`);
     try {
-      const result = await generateOrganizedDocument(item.transcript, item.title, mode);
+      const result = mode === 'conversation'
+        ? await generateConversation(item, (part,total) => setBusy(`separating speakers ${part} of ${total}`))
+        : await generateOrganizedDocument(item.transcript!, item.title, mode);
       await deleteLocalFile(item.outputPdfUris?.[mode]);
       const outputPdfUris = { ...(item.outputPdfUris || {}) };
       delete outputPdfUris[mode];
@@ -473,7 +479,7 @@ export default function RecordingDetail() {
 
       {item.transcript ? (
         <Section title="Turn the transcript into…" eyebrow="CREATE A FORMAT">
-          <Text style={s.muted}>Create any combination you want. Regenerating one format does not delete the others.</Text>
+          <Text style={s.muted}>Create any combination you want. Regenerating one format does not delete the others. Conversation uses saved audio to separate speakers.</Text>
           <View style={s.modeGrid}>
             <ModeButton label={item.notes ? 'Study Notz ✓' : 'Study Notz'} onPress={notes} disabled={Boolean(busy)} />
             {ORGANIZE_OPTIONS.map((option) => (

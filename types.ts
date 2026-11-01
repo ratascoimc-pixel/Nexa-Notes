@@ -19,7 +19,8 @@ export type OrganizationMode =
   | 'detailed-notes'
   | 'qa-review'
   | 'flashcards'
-  | 'references';
+  | 'references'
+  | 'conversation';
 
 export type OrganizedSection = {
   heading: string;

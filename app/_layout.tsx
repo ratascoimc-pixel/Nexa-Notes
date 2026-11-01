@@ -16,6 +16,7 @@ export default function Layout() {
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="shared" options={{ title: "Shared Notes" }} />
         <Stack.Screen name="library" options={{ title: 'Library' }} />
         <Stack.Screen name="recording/[id]" options={{ title: 'Recording' }} />
       </Stack>
