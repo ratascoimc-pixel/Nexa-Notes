@@ -95,13 +95,13 @@ jobs:
           ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk NOTZ-latest.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk NOTZ-sharing-preview.apk
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NOTZ-latest-Android
-          path: NOTZ-latest.apk
+          name: NOTZ-sharing-preview-Android
+          path: NOTZ-sharing-preview.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -110,5 +110,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete notz-latest --yes --cleanup-tag || true
-          gh release create notz-latest NOTZ-latest.apk --target "$GITHUB_SHA" --title "NOTZ Android Beta" --notes "NOTZ 1.6.0: Shared Notes with account sign-in, viewer/editor access, revision conflict protection, and online refresh. Conversation separates voices from saved audio with speaker labels, timestamps, and PDF export. Labels restart per audio part. Sharing is an early preview: save before leaving; offline drafts are not queued. This APK uses the existing NOTZ beta package and signing cache; it is separate from the EAS notztest app. Keep your existing app and recordings."
+          gh release delete notz-sharing-preview --yes --cleanup-tag || true
+          gh release create notz-sharing-preview NOTZ-sharing-preview.apk --target "$GITHUB_SHA" --title "NOTZ Shared Notes and Conversation Preview" --notes "NOTZ 1.6.0: Shared Notes with account sign-in, viewer/editor access, revision conflict protection, and online refresh. Conversation separates voices from saved audio with speaker labels, timestamps, and PDF export. Labels restart per audio part. Sharing is an early preview: save before leaving; offline drafts are not queued. This APK installs separately as NOTZ Preview. It does not replace your existing NOTZ app or import its local recordings. Keep the working app installed."

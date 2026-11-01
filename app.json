@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "NOTZ",
-    "slug": "notz",
-    "scheme": "notz",
+    "name": "NOTZ Preview",
+    "slug": "notz-sharing-preview",
+    "scheme": "notz-sharing-preview",
     "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/notz-icon.png",
@@ -27,7 +27,7 @@
       }
     },
     "android": {
-      "package": "com.masterkeyone.notzbeta",
+      "package": "com.masterkeyone.notzsharingpreview",
       "versionCode": 8,
       "permissions": [
         "RECORD_AUDIO",
