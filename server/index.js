@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
+import { conversationTurns } from './conversation.js';
 
 const UPLOAD_DIR = path.resolve('uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -83,6 +84,22 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
   } finally {
     if (req.file?.path) fs.unlink(req.file.path, () => {});
   }
+});
+
+// Separate endpoint preserves existing plain-transcript behavior.
+app.post('/conversation', upload.single('audio'), async (req,res) => {
+  try {
+    if (!requireKey(res)) return;
+    if (!req.file) return res.status(400).send('Missing audio');
+    const result = await withRetry(() => openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path), model: 'gpt-4o-transcribe-diarize',
+      response_format: 'diarized_json', chunking_strategy: 'auto',
+    }));
+    res.json({turns: conversationTurns(result)});
+  } catch (error) {
+    console.error('Conversation failed',error);
+    res.status(Number(error?.status)||500).send(error?.message||'Conversation failed');
+  } finally { if(req.file?.path) fs.unlink(req.file.path,()=>{}); }
 });
 
 const transcriptionJobs = new Map();
