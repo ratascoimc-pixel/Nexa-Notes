@@ -4,6 +4,7 @@ import cors from 'cors';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
 import { conversationTurns } from './conversation.js';
@@ -35,6 +36,20 @@ const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'notz-api', jobs: true, translation: Boolean(process.env.GOOGLE_TRANSLATE_API_KEY) }));
+
+
+const confirmationHeaders = {
+ 'Cache-Control': 'no-store',
+ 'Referrer-Policy': 'no-referrer',
+ 'X-Content-Type-Options': 'nosniff',
+ 'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src https://nrkbhjqiagvxtcmyusne.supabase.co; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+};
+app.get('/auth/confirmed', (_req,res) => {
+ res.set(confirmationHeaders).sendFile(fileURLToPath(new URL('./auth-confirm.html', import.meta.url)));
+});
+app.get('/auth/confirm.js', (_req,res) => {
+ res.set(confirmationHeaders).type('application/javascript').sendFile(fileURLToPath(new URL('./auth-confirm.js', import.meta.url)));
+});
 
 function requireKey(res) {
   if (!process.env.OPENAI_API_KEY) {
