@@ -7,5 +7,15 @@ export function conversationTurns(result) {
     return {speaker:labels.get(s.speaker),start:s.start,end:s.end,text:s.text.trim()};
   });
   if (!turns.length) throw new Error('No speech detected.');
-  return turns;
+  // API segments mark speech chunks, not necessarily a change of speaker.
+  // A pause does not start a new turn: only a different voice does.
+  const grouped = [];
+  for (const turn of turns) {
+    const previous = grouped[grouped.length - 1];
+    if (previous && previous.speaker === turn.speaker) {
+      previous.text += ' ' + turn.text;
+      previous.end = turn.end;
+    } else grouped.push({ ...turn });
+  }
+  return grouped;
 }
