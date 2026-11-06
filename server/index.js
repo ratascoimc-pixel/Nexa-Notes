@@ -98,20 +98,39 @@ async function transcribeAudio(file, language, previous) {
 
   const directory = await fs.promises.mkdtemp(path.join(UPLOAD_DIR, 'transcribe-'));
   try {
+    const split = (options, extension, timeout) => runFile(ffmpegPath, [
+      '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', '1',
+      '-i', file.path, '-map', '0:a:0', ...options,
+      '-f', 'segment', '-segment_time', '480', '-reset_timestamps', '1',
+      path.join(directory, `%06d.${extension}`),
+    ], { timeout });
+
+    // Android recordings already contain compressed audio. Copy it into
+    // smaller containers before falling back to a full conversion.
+    let names = [];
+    if (['.m4a', '.mp4'].includes(path.extname(file.path))) {
+      try {
+        await split(['-c:a', 'copy'], 'm4a', 15_000);
+        names = (await fs.promises.readdir(directory)).sort();
+        const sizes = await Promise.all(names.map(name => fs.promises.stat(path.join(directory, name))));
+        if (sizes.some(part => part.size >= 25_000_000)) names = [];
+      } catch (error) {
+        console.warn('Could not split compressed transcription audio', error.code);
+        names = [];
+      }
+    }
     try {
-      await runFile(ffmpegPath, [
-        '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', '1',
-        '-i', file.path, '-map', '0:a:0', '-ac', '1', '-ar', '24000',
-        '-c:a', 'libmp3lame', '-b:a', '48k', '-f', 'segment', '-segment_time', '480',
-        path.join(directory, '%06d.mp3'),
-      ], { timeout: 60_000 });
+      if (!names.length) {
+        await split(['-ac', '1', '-ar', '24000', '-c:a', 'libmp3lame', '-b:a', '48k'], 'mp3', 60_000);
+        names = (await fs.promises.readdir(directory)).filter(name => name.endsWith('.mp3')).sort();
+      }
     } catch (error) {
-      console.error('Transcription audio conversion failed', error.code);
+      console.error('Transcription audio conversion failed', error.code, error.signal, error.killed);
       if (error.code === 'ENOENT') throw new Error('NOTZ audio conversion is unavailable.');
       throw Object.assign(new Error('NOTZ could not prepare this audio part for transcription.'), { status: 422 });
     }
     const textParts = [];
-    for (const name of (await fs.promises.readdir(directory)).sort()) {
+    for (const name of names) {
       const result = await transcribePart(path.join(directory, name), previous);
       const text = String(result.text || '').trim();
       if (text) {
