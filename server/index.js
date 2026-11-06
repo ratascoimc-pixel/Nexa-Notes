@@ -6,6 +6,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import ffmpegPath from 'ffmpeg-static';
 import OpenAI from 'openai';
 import { conversationTurns } from './conversation.js';
 
@@ -32,6 +35,11 @@ const storage = multer.diskStorage({
   filename: (_req, file, cb) => cb(null, `${Date.now()}-${randomUUID()}${audioExtension(file)}`),
 });
 const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+const transcriptionUpload = multer({
+  storage,
+  limits: { fileSize: 96 * 1024 * 1024, files: 1, fields: 8 },
+}).single('audio');
+const runFile = promisify(execFile);
 
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
@@ -79,20 +87,63 @@ function normalizeLanguage(value) {
   return /^[a-z]{2,3}$/.test(code) ? code : 'auto';
 }
 
-// Backward-compatible endpoint for already-installed older betas.
-app.post('/transcribe', upload.single('audio'), async (req, res) => {
+async function transcribeAudio(file, language, previous) {
+  const transcribePart = (audioPath, context) => withRetry(() => openai.audio.transcriptions.create({
+    file: fs.createReadStream(audioPath),
+    model: 'gpt-transcribe',
+    language: language === 'auto' ? undefined : language,
+    prompt: context ? `This is the next segment of one continuous recording. Use this prior ending only for continuity of names and phrasing: ${context}` : undefined,
+  }));
+  if (file.size < 25_000_000) return (await transcribePart(file.path, previous)).text || '';
+
+  const directory = await fs.promises.mkdtemp(path.join(UPLOAD_DIR, 'transcribe-'));
+  try {
+    try {
+      await runFile(ffmpegPath, [
+        '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', '1',
+        '-i', file.path, '-map', '0:a:0', '-ac', '1', '-ar', '24000',
+        '-c:a', 'libmp3lame', '-b:a', '48k', '-f', 'segment', '-segment_time', '480',
+        path.join(directory, '%06d.mp3'),
+      ], { timeout: 60_000 });
+    } catch (error) {
+      console.error('Transcription audio conversion failed', error.code);
+      if (error.code === 'ENOENT') throw new Error('NOTZ audio conversion is unavailable.');
+      throw Object.assign(new Error('NOTZ could not prepare this audio part for transcription.'), { status: 422 });
+    }
+    const textParts = [];
+    for (const name of (await fs.promises.readdir(directory)).sort()) {
+      const result = await transcribePart(path.join(directory, name), previous);
+      const text = String(result.text || '').trim();
+      if (text) {
+        textParts.push(text);
+        previous = text.slice(-1200);
+      }
+    }
+    return textParts.join('\n\n');
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+  }
+}
+
+// Keep the response compatible with installed Android builds.
+app.post('/transcribe', (req, res, next) => {
+  transcriptionUpload(req, res, (error) => {
+    if (!error) return next();
+    if (req.aborted || res.destroyed) return;
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).send('This audio part exceeds the NOTZ upload limit of 96 MB.');
+    }
+    console.error('Transcription upload failed', error.message);
+    const malformed = error instanceof multer.MulterError || error.message === 'Unexpected end of form';
+    return res.status(malformed ? 400 : 500).send('NOTZ could not receive this audio part.');
+  });
+}, async (req, res) => {
   try {
     if (!requireKey(res)) return;
     if (!req.file) return res.status(400).send('Missing audio');
     const previous = String(req.body.previousContext || '').slice(-1200);
     const language = normalizeLanguage(req.body.language);
-    const result = await withRetry(() => openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: 'gpt-transcribe',
-      language: language === 'auto' ? undefined : language,
-      prompt: previous ? `This is the next segment of one continuous recording. Use this prior ending only for continuity of names and phrasing: ${previous}` : undefined,
-    }));
-    res.json({ text: result.text || '' });
+    res.json({ text: await transcribeAudio(req.file, language, previous) });
   } catch (e) {
     console.error(e);
     res.status(Number(e?.status) || 500).send(e?.message || 'Transcription failed');
