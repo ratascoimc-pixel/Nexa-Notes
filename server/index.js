@@ -130,12 +130,14 @@ async function transcribeAudio(file, language, previous) {
       throw Object.assign(new Error('NOTZ could not prepare this audio part for transcription.'), { status: 422 });
     }
     const textParts = [];
-    for (const name of names) {
-      const result = await transcribePart(path.join(directory, name), previous);
-      const text = String(result.text || '').trim();
-      if (text) {
-        textParts.push(text);
-        previous = text.slice(-1200);
+    for (let offset = 0; offset < names.length; offset += 3) {
+      const batch = names.slice(offset, offset + 3);
+      const results = await Promise.allSettled(batch.map((name, index) =>
+        transcribePart(path.join(directory, name), offset + index === 0 ? previous : '')));
+      for (const result of results) {
+        if (result.status === 'rejected') throw result.reason;
+        const text = String(result.value.text || '').trim();
+        if (text) textParts.push(text);
       }
     }
     return textParts.join('\n\n');
