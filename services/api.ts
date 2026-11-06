@@ -9,6 +9,16 @@ function requireApi() {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function uploadTranscriptionPart(url: string, form: FormData): Promise<Response> {
+  let response = await fetch(url, { method: 'POST', body: form });
+  for (const delay of [3000, 10000]) {
+    if (![502, 503, 504].includes(response.status)) break;
+    await wait(delay);
+    response = await fetch(url, { method: 'POST', body: form });
+  }
+  return response;
+}
+
 export async function checkApi(): Promise<boolean> {
   try {
     const response = await fetch(`${requireApi()}/health`);
@@ -45,7 +55,7 @@ export async function transcribeRecording(
     form.append('totalParts', String(recording.segmentUris.length));
     if (parts.length) form.append('previousContext', parts[parts.length - 1].slice(-1200));
 
-    const response = await fetch(`${base}/transcribe`, { method: 'POST', body: form });
+    const response = await uploadTranscriptionPart(`${base}/transcribe`, form);
     if (!response.ok) throw new Error((await response.text()) || `Transcription failed on part ${i + 1}.`);
     const data = await response.json();
     if (typeof data.text !== 'string') throw new Error(`Invalid transcription response on part ${i + 1}.`);
